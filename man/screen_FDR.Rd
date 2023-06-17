@@ -21,5 +21,5 @@ screen_FDR(X, M, COV, intercept = TRUE, fdr = 0.2)
 A list of the screening results including the IDs, pvalues and coefficients.
 }
 \description{
-The first step of CoxMKF, which conducts preliminary screening with the p-values from X to M with FDR control.
+The first step of CoxMDS, which conducts preliminary screening with the p-values from X to M with FDR control.
 }
