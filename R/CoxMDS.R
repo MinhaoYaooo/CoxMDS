@@ -37,7 +37,7 @@ screen_FDR <- function(X, M, COV, intercept=TRUE, fdr=0.2){
 
 
 #' @title Data Split for Survival Response
-#' @description Split the data for survival outcome and compute the corresponding statistics.
+#' @descripIn Split the data for survival outcome and compute the corresponding statistics.
 #' @param X a vector of the exposure.
 #' @param Y a vector of the outcome.
 #' @param MS a matrix of the mediators after the pre-liminary screening.
