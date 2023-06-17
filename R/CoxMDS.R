@@ -1,5 +1,5 @@
 #' @title Screening Based on X->M with FDR control
-#' @description The first step of CoxMKF, which conducts preliminary screening with the p-values from X to M with FDR control.
+#' @description The first step of CoxMDS, which conducts preliminary screening with the p-values from X to M with FDR control.
 #' @param X a vector of the exposure.
 #' @param M a matrix of the mediators.
 #' @param COV optional, a matrix of the potential covariates.
