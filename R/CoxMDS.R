@@ -78,14 +78,13 @@ datasplit_surv <- function(X, Y, MS, COV, penalty=c('MCP','lasso','SCAD'),  q=0.
     Coefficients <- coef(fit, lambda = lam)
     beta1 <- Coefficients[1:pS]
     nonzero_index <- which(beta1 != 0)
-    zero_index <- which(beta1 == 0)
 
     ### fit cox regression on the second half of the data
     if(length(nonzero_index)!=0){
       if(is.null(COV)){
-        DATA = data.frame(Y=Y, XM[,-zero_index])
+        DATA = data.frame(Y=Y, cbind(MS[,nonzero_index], X))
       }else{
-        DATA = data.frame(Y=Y, XM_COV[,-zero_index])
+        DATA = data.frame(Y=Y, cbind(MS[,nonzero_index], X, COV))
       }
       fit2 <- survival::coxph(Y ~ ., data = DATA[sample_index2,])
       beta2 <- rep(0,pS)
