@@ -1,7 +1,7 @@
 Package: CoxMDS
 Type: Package
 Title: High-Dimensional Mediation Analysis with a Survival Outcome using Data Splitting
-Version: 0.1.0
+Version: 1.1.0
 Author: Peixin Tian, Minhao Yao
 Maintainer: Minhao Yao <mhyao@connect.hku.hk>
 Description: Control the finite-sample FDR in high-dimensional mediation analysis with a survival outcome using data splitting.
@@ -9,4 +9,4 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.2.3
-Imports: ncvreg, survival, corpcor
+Imports: ncvreg, survival, corpcor, knockoff

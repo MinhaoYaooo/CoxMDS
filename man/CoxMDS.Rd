@@ -9,10 +9,13 @@ CoxMDS(
   Y,
   M,
   COV,
-  penalty = c("MCP", "lasso", "SCAD"),
+  penalty = "MCP",
+  method = "ds",
+  aggregation = "inclusion_rate",
   intercept = TRUE,
   q1 = 0.2,
   q2 = 0.1,
+  gamma = 0.05,
   n_split = 25
 )
 }
@@ -27,11 +30,17 @@ CoxMDS(
 
 \item{penalty}{the penalty used in the cox regression.}
 
+\item{method}{data splitting or knockoff.}
+
+\item{aggregation}{"inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.}
+
 \item{intercept}{binary, whether an intercept should be included in the regression M~X, the default value is TRUE.}
 
 \item{q1}{the pre-defined FDR level in the screening step.}
 
 \item{q2}{the pre-defined FDR level in the data splitting procedure.}
+
+\item{gamma}{the pre-defined quantile level if we use the quantile aggregation.}
 
 \item{n_split}{the pre-defined number of splittings in the MDS.}
 }
