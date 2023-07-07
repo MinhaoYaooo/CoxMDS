@@ -15,6 +15,7 @@ CoxMDS(
   intercept = TRUE,
   q1 = 0.2,
   q2 = 0.1,
+  cutoff = 0.5,
   gamma = 0.05,
   n_split = 25
 )
@@ -30,7 +31,7 @@ CoxMDS(
 
 \item{penalty}{the penalty used in the cox regression.}
 
-\item{method}{data splitting or knockoff.}
+\item{method}{"ds" or "knockoff", corresponds to selection based on data splitting or knockoff.}
 
 \item{aggregation}{"inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.}
 
@@ -39,6 +40,8 @@ CoxMDS(
 \item{q1}{the pre-defined FDR level in the screening step.}
 
 \item{q2}{the pre-defined FDR level in the data splitting procedure.}
+
+\item{cutoff}{the proportion of the first split if we use data splitting method.}
 
 \item{gamma}{the pre-defined quantile level if we use the quantile aggregation.}
 

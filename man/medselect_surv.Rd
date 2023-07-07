@@ -13,6 +13,7 @@ medselect_surv(
   method = "ds",
   aggregation = "inclusion_rate",
   q = 0.1,
+  cutoff = 0.5,
   gamma = 0.05,
   n_split = 25
 )
@@ -33,6 +34,8 @@ medselect_surv(
 \item{aggregation}{"inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.}
 
 \item{q}{the pre-defined FDR level in the data splitting procedure.}
+
+\item{cutoff}{the proportion of the first split if we use data splitting method.}
 
 \item{gamma}{the pre-defined quantile level if we use the quantile aggregation.}
 

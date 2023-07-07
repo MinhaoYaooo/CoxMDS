@@ -45,12 +45,13 @@ screen_FDR <- function(X, M, COV, intercept=TRUE, fdr=0.2){
 #' @param method "ds" or "knockoff", corresponds to selection based on data splitting or knockoff.
 #' @param aggregation "inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.
 #' @param q the pre-defined FDR level in the data splitting procedure.
+#' @param cutoff the proportion of the first split if we use data splitting method.
 #' @param gamma the pre-defined quantile level if we use the quantile aggregation.
 #' @param n_split the pre-defined number of multiple data splittings/knockoffs.
 #' @return A vector of mediator IDs selected by MDS/AKO.
 #' @export
 
-medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregation="inclusion_rate", q=0.1, gamma=0.05, n_split = 25){
+medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregation="inclusion_rate", q=0.1, cutoff=0.5,gamma=0.05, n_split = 25){
 
   pS <- ncol(MS); n <- nrow(MS)
   inclusion_rate = matrix(0, n_split, pS)
@@ -60,7 +61,7 @@ medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregatio
   for (i in 1:n_split) {
 
     if(method=='ds'){
-      selected.results <- single_datasplit_surv(X, Y, MS, COV, penalty = penalty, q=q)
+      selected.results <- single_datasplit_surv(X, Y, MS, COV, penalty = penalty, q=q, cutoff = cutoff)
     }else if(method=="knockoff"){
       selected.results <- single_knockoff_surv(X, Y, MS, COV, penalty = penalty, q=q)
     }
@@ -124,11 +125,12 @@ medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregatio
 #' @param M a matrix of the mediators.
 #' @param COV optional, a matrix of the potential covariates.
 #' @param penalty the penalty used in the cox regression.
-#' @param method data splitting or knockoff.
+#' @param method "ds" or "knockoff", corresponds to selection based on data splitting or knockoff.
 #' @param aggregation "inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.
 #' @param intercept binary, whether an intercept should be included in the regression M~X, the default value is TRUE.
 #' @param q1 the pre-defined FDR level in the screening step.
 #' @param q2 the pre-defined FDR level in the data splitting procedure.
+#' @param cutoff the proportion of the first split if we use data splitting method.
 #' @param gamma the pre-defined quantile level if we use the quantile aggregation.
 #' @param n_split the pre-defined number of splittings in the MDS.
 #'
@@ -137,7 +139,7 @@ medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregatio
 
 
 CoxMDS <- function(X, Y, M, COV, penalty='MCP', method='ds', aggregation='inclusion_rate', intercept=TRUE, q1=0.2,
-                   q2=0.1, gamma=0.05, n_split = 25){
+                   q2=0.1, cutoff=0.5, gamma=0.05, n_split = 25){
 
   n <- nrow(M); p <- ncol(M)
 
@@ -149,7 +151,7 @@ CoxMDS <- function(X, Y, M, COV, penalty='MCP', method='ds', aggregation='inclus
 
   ##### STEP 2: Selection with Data Splitting #####
 
-  ID_DS <- medselect_surv(X, Y, MS, COV, penalty = penalty,method=method, aggregation = aggregation,q=q2, gamma = gamma, n_split = n_split)
+  ID_DS <- medselect_surv(X, Y, MS, COV, penalty = penalty,method=method, aggregation = aggregation,q=q2, cutoff = cutoff,gamma = gamma, n_split = n_split)
 
   ID_DS <- screen.results$ID_screen[ID_DS]
 
@@ -187,11 +189,11 @@ analys <- function(W, q){
 }
 
 
-single_datasplit_surv <- function(X, Y, MS, COV, penalty="MCP", q=0.1){
+single_datasplit_surv <- function(X, Y, MS, COV, penalty="MCP", q=0.1, cutoff=0.5){
   pS <- ncol(MS); n <- nrow(MS)
 
   ### randomly split the data
-  sample_index1 <- sample(x = c(1:n), size = 0.5 * n, replace = F)
+  sample_index1 <- sample(x = c(1:n), size = cutoff * n, replace = F)
   sample_index2 <- setdiff(c(1:n), sample_index1)
 
   ### fit penalized cox regression on the first half of the data
@@ -230,6 +232,7 @@ single_datasplit_surv <- function(X, Y, MS, COV, penalty="MCP", q=0.1){
     DS_selected_index = selected_index
 
   }else{
+    mirror_stat <- rep(0, pS)
     DS_selected_index = NULL
   }
 
