@@ -35,86 +35,100 @@ screen_FDR <- function(X, M, COV, intercept=TRUE, fdr=0.2){
   return(list(ID_screen=ID_screen, pval=p_alpha, coef=coef_alpha))
 }
 
-#' @title Data Splitting for Survival Response
+
+#' @title Data Split for Survival Response
 #' @description Split the data for survival outcome and compute the corresponding statistics.
 #' @param X a vector of the exposure.
 #' @param Y a vector of the outcome.
 #' @param MS a matrix of the mediators after the pre-liminary screening.
 #' @param COV optional, a matrix of the potential covariates.
-#' @param penalty "MCP", "lasso" or "SCAD",the penalty used in the cox regression.
-#' @param method "ds" or "knockoff", corresponds to selection based on data splitting or knockoff.
-#' @param aggregation "inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.
+#' @param penalty the penalty used in the cox regression.
 #' @param q the pre-defined FDR level in the data splitting procedure.
-#' @param cutoff the proportion of the first split if we use data splitting method.
-#' @param gamma the pre-defined quantile level if we use the quantile aggregation.
-#' @param n_split the pre-defined number of multiple data splittings/knockoffs.
-#' @return A vector of mediator IDs selected by MDS/AKO.
+#' @param n_split the pre-defined number of multiple data splittings.
+#'
+#' @return A vector of mediator IDs selected by AKO.
 #' @export
 
-medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregation="inclusion_rate", q=0.1, cutoff=0.5,gamma=0.05, n_split = 25){
+datasplit_surv <- function(X, Y, MS, COV, penalty=c('MCP','lasso','SCAD'),  q=0.1, n_split = 25){
 
   pS <- ncol(MS); n <- nrow(MS)
   inclusion_rate = matrix(0, n_split, pS)
-  pvals = matrix(0, pS, n_split)
   n_select <- rep(0, n_split)
 
   for (i in 1:n_split) {
 
-    if(method=='ds'){
-      selected.results <- single_datasplit_surv(X, Y, MS, COV, penalty = penalty, q=q, cutoff = cutoff)
-    }else if(method=="knockoff"){
-      selected.results <- single_knockoff_surv(X, Y, MS, COV, penalty = penalty, q=q)
+    ### randomly split the data
+    sample_index1 <- sample(x = c(1:n), size = 0.5 * n, replace = F)
+    sample_index2 <- setdiff(c(1:n), sample_index1)
+
+    ### fit penalized cox regression on the first half of the data
+    XM <- cbind(MS, X)
+    if (is.null(COV)) {
+      fit <- ncvreg::ncvsurv(XM[sample_index1,], Y[sample_index1],
+                             penalty = penalty, nlambda = 5000,
+                             penalty.factor = c(rep(1, pS), 0))
+    }else {
+      XM_COV <- cbind(XM, COV)
+      fit <-  ncvreg::ncvsurv(XM_COV[sample_index1,], Y[sample_index1],
+                              penalty = penalty, nlambda = 1000,
+                              penalty.factor = c(rep(1, pS), rep(0, 1 + ncol(COV))))
     }
 
-    if(length(selected.results$selected_index)!=0){
-      n_select[i] <- length(selected.results$selected_index)
-      inclusion_rate[i, selected.results$selected_index] <- 1/n_select[i]
+    lam <- fit$lambda[which.min(BIC(fit))]
+    Coefficients <- coef(fit, lambda = lam)
+    beta1 <- Coefficients[1:pS]
+    nonzero_index <- which(beta1 != 0)
+
+    ### fit cox regression on the second half of the data
+    if(length(nonzero_index)!=0){
+      if(is.null(COV)){
+        DATA = data.frame(Y=Y, cbind(MS[,nonzero_index], X))
+      }else{
+        DATA = data.frame(Y=Y, cbind(MS[,nonzero_index], X, COV))
+      }
+      fit2 <- survival::coxph(Y ~ ., data = DATA[sample_index2,])
+      beta2 <- rep(0,pS)
+      beta2[nonzero_index] <- summary(fit2)$coefficients[1:length(nonzero_index)]
+
+      ### calculate the mirror statistics
+      mirror_stat <- sign(beta1 * beta2) * (abs(beta1) + abs(beta2))
+
+      selected_index = analys(mirror_stat, q)
+      DS_selected_index = selected_index
+
+      if(length(selected_index)!=0){
+        n_select[i] <- length(selected_index)
+        inclusion_rate[i, selected_index] <- 1/n_select[i]
+      }
+
+    }else{
+      DS_selected_index = NULL
     }
-
-    pvals[,i] <- selected.results$pval_intermediate
-
   }
 
 
   ### aggregate the multiple data splitting results
+  inclusion_rate <- apply(inclusion_rate, 2, mean)
 
-  if(aggregation=="inclusion_rate"){
-
-    inclusion_rate <- apply(inclusion_rate, 2, mean)
-
-    feature_rank <- order(inclusion_rate)
-    feature_rank <- setdiff(feature_rank, which(inclusion_rate == 0))
-    if(length(feature_rank)!=0){
-      null_feature <- numeric()
-      for(feature_index in 1:length(feature_rank)){
-        if(sum(inclusion_rate[feature_rank[1:feature_index]]) > q){
-          break
-        }else{
-          null_feature <- c(null_feature, feature_rank[feature_index])
-        }
+  feature_rank <- order(inclusion_rate)
+  feature_rank <- setdiff(feature_rank, which(inclusion_rate == 0))
+  if(length(feature_rank)!=0){
+    null_feature <- numeric()
+    for(feature_index in 1:length(feature_rank)){
+      if(sum(inclusion_rate[feature_rank[1:feature_index]]) > q){
+        break
+      }else{
+        null_feature <- c(null_feature, feature_rank[feature_index])
       }
-      Multiple_selected_index <- setdiff(feature_rank, null_feature)
-    }else{
-      Multiple_selected_index = NULL
     }
-    Multiple_selected_index <- Multiple_selected_index[order(Multiple_selected_index)]
-
-    out = colnames(MS)[Multiple_selected_index]
-  }else if(aggregation=="quantile"){
-
-    aggregated_pval = data.frame()
-    aggregated_pval[1, 1:pS] = apply(pvals, 1, quantile_aggregation, gamma=gamma, adaptive=FALSE)
-    colnames(aggregated_pval) = paste0(colnames(MS))
-
-    threshold = fdr_threshold(aggregated_pval[1,], fdr=q, method='bhq',reshaping_function=NULL)
-
-    ID_select = c()
-
-    for(m in 1:pS){if(aggregated_pval[1,m]<=threshold){ID_select = c(ID_select, paste0(colnames(aggregated_pval)[m]))}}
-
-    out = ID_select
+    MDS_selected_index <- setdiff(feature_rank, null_feature)
+  }else{
+    MDS_selected_index = NULL
   }
-  return(out)
+
+  MDS_selected_index <- MDS_selected_index[order(MDS_selected_index)]
+
+  return(colnames(MS)[MDS_selected_index])
 }
 
 
@@ -125,21 +139,17 @@ medselect_surv <- function(X, Y, MS, COV, penalty='MCP', method='ds', aggregatio
 #' @param M a matrix of the mediators.
 #' @param COV optional, a matrix of the potential covariates.
 #' @param penalty the penalty used in the cox regression.
-#' @param method "ds" or "knockoff", corresponds to selection based on data splitting or knockoff.
-#' @param aggregation "inclusion_rate" or "quantile", corresponds to aggregation method based on inclusion rate or quantile aggregation.
 #' @param intercept binary, whether an intercept should be included in the regression M~X, the default value is TRUE.
 #' @param q1 the pre-defined FDR level in the screening step.
 #' @param q2 the pre-defined FDR level in the data splitting procedure.
-#' @param cutoff the proportion of the first split if we use data splitting method.
-#' @param gamma the pre-defined quantile level if we use the quantile aggregation.
 #' @param n_split the pre-defined number of splittings in the MDS.
 #'
 #' @return A list of the CoxMDS results including the IDs of the screening step, the IDs of the selection step and the estimation for the effects.
 #' @export
 
 
-CoxMDS <- function(X, Y, M, COV, penalty='MCP', method='ds', aggregation='inclusion_rate', intercept=TRUE, q1=0.2,
-                   q2=0.1, cutoff=0.5, gamma=0.05, n_split = 25){
+CoxMDS <- function(X, Y, M, COV, penalty=c('MCP', 'lasso', 'SCAD'), intercept=TRUE, q1=0.2,
+                   q2=0.1, n_split = 25){
 
   n <- nrow(M); p <- ncol(M)
 
@@ -151,7 +161,7 @@ CoxMDS <- function(X, Y, M, COV, penalty='MCP', method='ds', aggregation='inclus
 
   ##### STEP 2: Selection with Data Splitting #####
 
-  ID_DS <- medselect_surv(X, Y, MS, COV, penalty = penalty,method=method, aggregation = aggregation,q=q2, cutoff = cutoff,gamma = gamma, n_split = n_split)
+  ID_DS <- datasplit_surv(X, Y, MS, COV, penalty = penalty,q=q2, n_split = n_split)
 
   ID_DS <- screen.results$ID_screen[ID_DS]
 
@@ -189,276 +199,10 @@ analys <- function(W, q){
 }
 
 
-single_datasplit_surv <- function(X, Y, MS, COV, penalty="MCP", q=0.1, cutoff=0.5){
-  pS <- ncol(MS); n <- nrow(MS)
-
-  ### randomly split the data
-  sample_index1 <- sample(x = c(1:n), size = cutoff * n, replace = F)
-  sample_index2 <- setdiff(c(1:n), sample_index1)
-
-  ### fit penalized cox regression on the first half of the data
-  XM <- cbind(MS, X)
-  if (is.null(COV)) {
-    fit <- ncvreg::ncvsurv(XM[sample_index1,], Y[sample_index1],
-                           penalty = penalty, nlambda = 5000,
-                           penalty.factor = c(rep(1, pS), 0))
-  }else {
-    XM_COV <- cbind(XM, COV)
-    fit <-  ncvreg::ncvsurv(XM_COV[sample_index1,], Y[sample_index1],
-                            penalty = penalty, nlambda = 1000,
-                            penalty.factor = c(rep(1, pS), rep(0, 1 + ncol(COV))))
-  }
-
-  lam <- fit$lambda[which.min(BIC(fit))]
-  Coefficients <- coef(fit, lambda = lam)
-  beta1 <- Coefficients[1:pS]
-  nonzero_index <- which(beta1 != 0)
-
-  ### fit cox regression on the second half of the data
-  if(length(nonzero_index)!=0){
-    if(is.null(COV)){
-      DATA = data.frame(Y=Y, cbind(MS[,nonzero_index], X))
-    }else{
-      DATA = data.frame(Y=Y, cbind(MS[,nonzero_index], X, COV))
-    }
-    fit2 <- survival::coxph(Y ~ ., data = DATA[sample_index2,])
-    beta2 <- rep(0,pS)
-    beta2[nonzero_index] <- summary(fit2)$coefficients[1:length(nonzero_index)]
-
-    ### calculate the mirror statistics
-    mirror_stat <- sign(beta1 * beta2) * (abs(beta1) + abs(beta2))
-
-    selected_index = analys(mirror_stat, q)
-    DS_selected_index = selected_index
-
-  }else{
-    mirror_stat <- rep(0, pS)
-    DS_selected_index = NULL
-  }
-
-  pval_intermediate = empirical_pval(mirror_stat, offset = 0)
-
-  return(list(selected_index=DS_selected_index, pval_intermediate=pval_intermediate))
-}
-
-
-single_knockoff_surv <- function(X, Y, MS, COV, penalty="MCP", q=0.1){
-
-  pS <- ncol(MS)
-
-  mu <- apply(MS,2,mean)
-  Sig <- matrix(as.numeric(corpcor::cov.shrink(MS,verbose=F)), nrow=ncol(MS))
-
-  MK = knockoff::create.gaussian(MS, mu, Sig)
-  colnames(MK) <- paste0(colnames(MS))
-
-  XM <- cbind(MS, MK, X)
-
-  if (is.null(COV)) {
-    fit <- ncvreg::ncvsurv(XM, Y,
-                           penalty = penalty, nlambda = 5000,
-                           penalty.factor = c(rep(1, 2*pS), 0))
-  }else {
-    XM_COV <- cbind(XM, COV)
-    fit <-  ncvreg::ncvsurv(XM_COV, Y,
-                            penalty = penalty, nlambda = 1000,
-                            penalty.factor = c(rep(1, 2*pS), rep(0, 1 + ncol(COV))))
-  }
-
-  lam <- fit$lambda[which.min(BIC(fit))]
-  Coefficients <- coef(fit, lambda = lam)
-
-  w = c()
-
-  for (m in 1:pS) {
-    w = c(w, abs(Coefficients[m])-abs(Coefficients[m + pS]))
-  }
-
-  selected_index = analys(w, q)
-
-  pval_intermediate = empirical_pval(w, offset = 0)
-
-  return(list(selected_index=selected_index, pval_intermediate=pval_intermediate))
-}
-
-
-bhy_threshold = function(pvals,
-                         reshaping_function = NULL, fdr = 0.1)
-{
-  # """Benjamini-Hochberg-Yekutieli procedure for controlling FDR, with input
-  #   shape function. Reference: Ramdas et al (2017)
-  # """
-  n_features = length(pvals)
-  p_vals_sorted = sort(pvals)
-  selected_index = 2 * n_features
-
-  # Default value for reshaping function -- defined in
-  # Benjamini & Yekutieli (2001)
-
-  if (is.null(reshaping_function)==TRUE)
-  {
-    temp = seq(n_features,1)
-    sum_inverse = 0
-    for (i in temp) {
-      sum_inverse = sum_inverse + 1 / i
-    }
-
-    return (bhq_threshold(pvals, fdr / sum_inverse))
-  }
-  else{
-    for (i in seq(n_features - 1, 0, -1)){
-      if (p_vals_sorted[i] <= fdr * reshaping_function(i) / n_features){
-        selected_index = i
-        break
-      }
-
-    }
-
-    if (selected_index <= n_features){
-      return (p_vals_sorted[selected_index])
-    }
-    else{
-      return ('-1.0')
-    }
-
-  }
-
-}
 
 
 
-bhq_threshold = function(pvals, fdr=0.1){
-  #   """Standard Benjamini-Hochberg for controlling False discovery rate
-  # """
-  n_features = length(pvals)
-  pvals_sorted = sort(pvals)
-  selected_index = 2 * n_features
-  for (i in seq(n_features, 1, -1)){
-    if (pvals_sorted[i] <= (fdr * i / n_features)){
-      selected_index = i
-      break
-    }
-  }
 
-  if (selected_index <= n_features){
-    return (pvals_sorted[selected_index])
-  }
-
-  else{
-    return ('-1.0')
-  }
-}
-
-fdr_threshold = function(pvals, fdr=0.1, method='bhq', reshaping_function=NULL){
-  if (method == 'bhq'){
-    # pvals_bhq = as.vector(unlist(pvals))
-    return (bhq_threshold(pvals, fdr=fdr))
-  }
-  else{
-    if(method == 'bhy'){
-      # pvals_bhy = as.vector(unlist(pvals))
-      return( bhy_threshold(
-        pvals, fdr=fdr, reshaping_function=reshaping_function))
-    }
-    else{
-      return('{} is not support FDR control method')
-    }
-  }
-}
-
-empirical_pval = function(test_score, offset = 1){
-  pvals = c()
-  n_features = length(test_score)
-  if (offset !=0 && offset!=1){
-    return("'offset' must be either 0 or 1")
-  }
-  else{
-    test_score_inv = -test_score
-    for (i in 1:n_features){
-      if (test_score[i] <= 0){
-        pvals = c(pvals, 1)
-      }
-      else{
-        # pvals = c(pvals,(offset+sum(test_score_inv >= test_score[i]))/n_features)
-        pvals = c(pvals,(offset+sum(test_score_inv[i] >= test_score))/n_features)
-      }
-    }
-  }
-  return (pvals)
-}
-
-fixed_quantile_aggregation = function(pvals, gamma = 0.05){
-  #   """Quantile aggregation function based on Meinshausen et al (2008)
-  # Parameters
-  # ----------
-  # pvals : 2D ndarray (n_bootstrap, n_test)
-  # p-value (adjusted)
-  # gamma : float
-  # Percentile value used for aggregation.
-  # Returns
-  # -------
-  # 1D ndarray (n_tests, )
-  # Vector of aggregated p-value
-  # """
-  # pvals_fixed = as.vector(unlist(pvals))
-  converted_score = (1 / gamma) *  quantile(pvals, gamma)
-
-  return (min(1, converted_score))
-}
-
-adaptive_quantile_aggregation = function(pvals, gamma_min=0.05){
-  #   """adaptive version of the quantile aggregation method, Meinshausen et al.
-  # (2008)"""
-  gammas = seq(gamma_min, 1.05, 0.05)
-  list_Q = matrix(0,nrow = length(gammas), ncol = length(gammas))
-  for (gamma in gammas) {
-    list_Q = c(list_Q, fixed_quantile_aggregation(pvals, gamma))
-
-  }
-  return (min(1, (1 - log(gamma_min)) * min(list_Q)))
-}
-
-quantile_aggregation = function(pvals, gamma=0.5, gamma_min=0.00001, adaptive=FALSE){
-  if (adaptive == TRUE){
-    return (adaptive_quantile_aggregation(pvals, gamma_min))
-  }
-
-  else{
-    return (fixed_quantile_aggregation(pvals, gamma))
-  }
-
-}
-
-mfdr_tpp_knockoff = function(q, w, t, beta_true, beta_est){
-  Sa = c()
-  for(m in 1:length(w)){if(w[m]<=t){Sa = c(Sa, m)}}
-
-  true_beta = which(beta_true!=0)
-  Ec = which(beta_true == 0)
-  mFDR_k = length(intersect(Sa, Ec))/(length(Sa)+1/q)
-
-  #compute TPP with knockoffs
-
-  tpp_k= length(intersect(Sa, true_beta))
-  TPP_k = tpp_k/max(1,length(true_beta))
-
-  return(list(mFDR_withknockoff = mFDR_k, TPP_withknockoff = TPP_k, l.sa = length(Sa)))
-}
-
-#compute baseline mFDR and TPP
-mfdr_tpp_base = function(q, beta_true, beta_est){
-  true_beta = which(beta_true!=0)
-  Ec = which(beta_true ==0)
-
-  Sa_b = which(beta_est!=0)
-  mFDR_b = length(intersect(Sa_b, Ec))/(length(Sa_b)+1/q)
-
-  #compute TPP
-  t_base = length(intersect(Sa_b, true_beta))
-  TPP_base = t_base/max(1,length(true_beta))
-
-  return(list(mFDR_baseline = mFDR_b, TPP_baseline = TPP_base))
-}
 
 
 
