@@ -44,3 +44,30 @@ Then we apply `CoxMDS` to select the mediators:
 results <- CoxMDS(X, Y, M, COV, penalty="MCP")
 ```
 
+# Results
+
+Here is an example of the results:
+
+```
+$first.step
+ [1] "M1"   "M2"   "M3"   "M4"   "M5"   "M6"   "M7"   "M8"   "M9"  
+[10] "M10"  "M17"  "M417" "M496" "M919" "M978"
+
+$second.step
+[1] "M1" "M2" "M3" "M4" "M5" "M6" "M7" "M8"
+
+$estimates
+        alpha       beta alpha.beta
+M1  0.6596348  0.4083061  0.2693329
+M2  0.4783746  0.4450930  0.2129212
+M3 -0.3939130  0.3636737 -0.1432558
+M4 -0.5280515  0.3384643 -0.1787266
+M5  0.3670641 -0.4475635 -0.1642845
+M6  0.5909356 -0.4930380 -0.2913537
+M7 -0.5962105 -0.3871237  0.2308072
+M8 -0.4476374 -0.4785410  0.2142129
+```
+
+The `$first.step` returns candidate mediators after X->M screening. The `$second.step` returns mediators selected by CoxMDS with non-zero indirect effects. The `$estimates` returns estimates of the effects.
+
+
