@@ -41,6 +41,6 @@ COV <- Z
 ```
 Then we apply `CoxMDS` to select the mediators:
 ```
-results <- CoxMDS(X, Y, M, COV)
+results <- CoxMDS(X, Y, M, COV, penalty="MCP")
 ```
 
