@@ -35,10 +35,19 @@ The CoxMDS function returns a list containing three main components:
 
 # Workflow Examples
 
-First, we generate the data:
+The following example walks through the entire process, from data simulation to interpreting the results.
+
+## Simulate Data
+
+First, we load the necessary package and simulate a dataset that mimics real-world data structure.
+
 ```
+# Load the package
+library(CoxMDS)
+
 n <- 500                                   #number of samples
 p <- 1000                                  #number of mediators
+
 alpha=rep(0,p)                             #coefficients (mediator~exposure)
 beta=rep(0,p)                              #coefficients (outcome~mediators)
 alpha[1:12] <- c(0.55,0.45,-0.4,-0.45,0.5,0.6,-0.4,-0.46,-0.4,0.5,0,0)
@@ -65,14 +74,23 @@ status <- as.numeric(ft <= ct)             #censoring indicator
 Y <- survival::Surv(time, status)
 COV <- Z
 ```
-Then we apply `CoxMDS` to select the mediators:
+
+## Run CoxMDS
+
+Now, we apply the `CoxMDS` function to the simulated data to identify significant mediators.
+
 ```
-results <- CoxMDS(X, Y, M, COV, penalty="MCP")
+# Perform Mediation Analysis
+results <- CoxMDS(X = X, Y = Y, M = M, COV = COV, penalty = "MCP")
+
+# View the Results
+print(results)
 ```
 
-# Results
+## Interpret the Results
 
-Here is an example of the results:
+Let's break down the output list from the `results` object.
+
 
 ```
 $first.step
@@ -94,6 +112,8 @@ M7 -0.5962105 -0.3871237  0.2308072
 M8 -0.4476374 -0.4785410  0.2142129
 ```
 
-The `$first.step` returns candidate mediators after X->M screening. The `$second.step` returns mediators selected by CoxMDS with non-zero indirect effects. The `$estimates` returns estimates of the effects.
+* Mediators listed in `$second.step` are interpreted as having statistically significant indirect effects from the exposure `X` to the survival outcome `Y` under the `CoxMDS` procedure with finite-sample FDR control.
 
-
+* The `alpha.beta` value quantifies the mediator-specific indirect effect:
+  + A positive `alpha.beta` suggests that mediator contributes to increased hazard (risk),
+  + A negative `alpha.beta` suggests that mediator contributes to decreased hazard (protective).
