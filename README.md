@@ -8,7 +8,33 @@ You can install the development version of `CoxMDS` from Github via the `devtool
 devtools::install_github("MinhaoYaooo/CoxMDS")
 ```
 
-# Examples
+# Detailed Tutorial
+
+This section provides a thorough explanation of the required input data and the output objects.
+
+## Input Data Format
+
+The `CoxMDS` function  requires four main arguments:
+
+* `X`: A numeric vector of length `n` (number of samples) representing the exposure variable of interest.
+* `Y`: A `Surv` object for the time-to-event outcome of length `n`. This is typically created using the `survival::Surv()` function, which takes two arguments: `time` (the observed follow-up time) and `status` (the event indicator, usually 1 for event and 0 for censoring).
+* `M`: A numeric matrix of size `n x p` (samples x mediators) representing the high-dimensional mediators. Each column should correspond to one mediator. It is good practice to name these columns (e.g., `M1, M2, ...`).
+* `COV`: A numeric matrix of size `n x k` (samples x covariates) representing any additional covariates to be adjusted for in the model (e.g., age, sex, clinical variables). If there are no covariates, this can be omitted.
+
+## Output Results Explanation
+The CoxMDS function returns a list containing three main components:
+
+* `$first.step`: A character vector containing the names of mediators that passed the initial screening step. This step selects mediators significantly associated with the exposure variable `X` after adjusting for covariates. These are the candidate mediators that proceed to the final selection.
+
+* `$second.step`: A character vector containing the names of mediators that were finally selected by `CoxMDS`. These mediators have non-zero indirect effects ($\alpha \beta \neq 0$) and are considered significant discoveries with controlled FDR.
+
+* `$estimates`: A data frame providing the estimated effect sizes for each mediator in `$second.step`. It has three columns:
+  + `alpha`: The estimated coefficient for the path Exposure (`X`) -> Mediator (`M`).
+  + `beta`: The estimated coefficient for the path Mediator (`M`) -> Outcome (`Y`), after adjusting for the exposure and other covariates.
+  + `alpha.beta`: The product `alpha * beta`, which represents the estimated indirect effect of the exposure on the outcome through the mediator.
+
+# Workflow Examples
+
 First, we generate the data:
 ```
 n <- 500                                   #number of samples
