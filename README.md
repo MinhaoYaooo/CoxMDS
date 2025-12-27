@@ -122,3 +122,6 @@ print(results$estimates)
 * The `alpha.beta` value quantifies the mediator-specific indirect effect:
   + A positive `alpha.beta` suggests that mediator contributes to increased hazard (risk),
   + A negative `alpha.beta` suggests that mediator contributes to decreased hazard (protective).
+
+# Reference
+Yao, Minhao, et al. "CoxMDS: Multiple Data Splitting for High-dimensional Mediation Analysis with Survival Outcomes in Epigenome-wide Studies." bioRxiv (2025): 2025-10. [(https://www.medrxiv.org/content/10.64898/2025.12.14.25342218v1.full.pdf)](https://www.medrxiv.org/content/10.64898/2025.12.14.25342218v1.full.pdf)
